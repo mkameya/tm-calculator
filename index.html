@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Tm Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #f7f7f7;
+      --panel: #ffffff;
+      --line: #cccccc;
+      --text: #222222;
+      --muted: #666666;
+      --accent: #009ec3;
+      --sel-bg: #ffe08a;
+      --sel-edge: #c98a00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Yu Gothic UI", Meiryo, Arial, sans-serif;
+      margin: 0 auto;
+      padding: 12px 16px 32px;
+      max-width: 980px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    h1 { font-size: 20px; margin: 0; }
+    .titlebar { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 10px; }
+    #help { line-height: 1.7; }
+    #help h3 { font-size: 14px; margin: 12px 0 2px; color: #006d87; }
+    #help h3:first-child { margin-top: 0; }
+    #help code { font-family: Consolas, "Cascadia Mono", Menlo, monospace; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    button {
+      font: inherit;
+      padding: 5px 10px;
+      border: 1px solid #999;
+      border-radius: 4px;
+      background: #f0f0f0;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    button:hover { background: #e2e2e2; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { background: #0089aa; }
+    .mono { font-family: Consolas, "Cascadia Mono", Menlo, monospace; }
+
+    /* 入力 */
+    details summary { cursor: pointer; font-weight: bold; }
+    #inputBox {
+      width: 100%;
+      height: 70px;
+      margin: 8px 0 6px;
+      padding: 4px 6px;
+      font-size: 13px;
+      resize: vertical;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .note { color: var(--muted); font-size: 12px; }
+    #loadMsg { margin-left: 4px; }
+
+    /* 配列表示 */
+    #view {
+      max-height: 46vh;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 6px 4px;
+      font-size: 15px;
+      line-height: 1.55;
+      cursor: text;
+      background: #fcfcfc;
+    }
+    #view .ln { white-space: pre; }
+    #view .ln::before {
+      content: attr(data-pos);
+      display: inline-block;
+      width: 6ch;
+      margin-right: 1ch;
+      text-align: right;
+      color: #999;
+      user-select: none;
+    }
+    #view mark {
+      background: var(--sel-bg);
+      color: inherit;
+      box-shadow: 0 -2px 0 var(--sel-edge) inset;
+      font-weight: bold;
+    }
+    #view .caret {
+      display: inline-block;
+      width: 0;
+      height: 1.1em;
+      vertical-align: text-bottom;
+      border-left: 2px solid var(--sel-edge);
+      margin-left: -1px;
+      margin-right: -1px;
+    }
+    #view .empty { color: var(--muted); padding: 10px; font-family: inherit; }
+    #measure { position: absolute; visibility: hidden; font-size: 15px; }
+
+    /* 操作 */
+    .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 8px; align-items: flex-end; }
+    .ctl { display: flex; flex-direction: column; gap: 3px; }
+    .ctl > span { font-size: 12px; color: var(--muted); }
+    .ctl .row { gap: 4px; }
+    .ctl input[type=number] { width: 80px; font: inherit; padding: 4px; }
+    .keys { margin-top: 8px; }
+    kbd {
+      font-family: inherit;
+      font-size: 11px;
+      border: 1px solid #aaa;
+      border-bottom-width: 2px;
+      border-radius: 3px;
+      padding: 0 4px;
+      background: #fafafa;
+    }
+
+    /* 結果 */
+    .result { border: 2px solid var(--accent); background: #f2fbfe; }
+    .stats { display: flex; flex-wrap: wrap; gap: 6px 26px; align-items: baseline; margin-bottom: 8px; }
+    .stat .lbl { font-size: 12px; color: var(--muted); display: block; }
+    .stat .val { font-size: 18px; font-weight: bold; }
+    .stat.big .val { font-size: 26px; color: #006d87; }
+    .stats.tm { border-top: 1px solid #b9dfe9; padding-top: 6px; }
+    .ctl { align-items: center; }
+    .ctl .hint { font-size: 11px; color: var(--muted); min-height: 16px; }
+    #view .rec::before {
+      content: attr(data-name);
+      display: block;
+      margin: 6px 0 2px;
+      padding-left: 7ch;
+      color: #006d87;
+      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: none;
+    }
+    #view .rec:first-child::before { margin-top: 0; }
+    .calc-cond ul { margin: 4px 0 0; padding-left: 18px; }
+    body.dragging { outline: 3px dashed var(--accent); outline-offset: -6px; }
+    .seqout { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; }
+    .seqout .lbl { flex: 0 0 150px; font-size: 12px; color: var(--muted); padding-top: 4px; }
+    .seqout .seq {
+      flex: 1 1 auto;
+      min-width: 0;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 4px 6px;
+      min-height: 28px;
+      word-break: break-all;
+      font-size: 15px;
+    }
+    .seqout button { flex: 0 0 auto; min-width: 74px; }
+    #strandBadge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      background: #e3e3e3;
+    }
+    #strandBadge.rev { background: #ffd9d2; }
+
+    @media (max-width: 600px) {
+      body { padding: 6px 6px 24px; font-size: 13px; }
+      #view { font-size: 13px; }
+      #measure { font-size: 13px; }
+      .seqout { flex-wrap: wrap; }
+      .seqout .lbl { flex-basis: 100%; padding-top: 0; }
+      .keys, .ctl .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <h1>Tm Calculator</h1>
+    <button id="btnHelp" aria-expanded="false" aria-controls="help">？ 使い方</button>
+  </div>
+
+  <div class="panel" id="help" hidden>
+    <h3>このツールについて</h3>
+    長めの配列を一度読み込んだあと、プライマーにする範囲の両端を動かしながら、長さ・GC 含量・Tm を確かめるツールです。配列そのものは書き換えないので、削りすぎて貼り直す必要がありません。
+    <h3>読み込み</h3>
+    入力欄に貼って「読み込む」、入力欄の外で <kbd>Ctrl</kbd>+<kbd>V</kbd>、「クリップボードから読み込む」、テキスト／FASTA ファイルを画面にドロップ、のどれでも読み込めます。数字・空白・改行は自動で取り除きます。<code>&gt;</code> で始まる行は配列の名前として扱い、複数あれば配列ごとに区切って表示します。GenBank 形式には対応していません（配列部分だけを貼ってください）。
+    <h3>範囲の選び方</h3>
+    配列の上をマウスでドラッグして大まかに選び、ボタンかキーで両端を1塩基ずつ調整します。<kbd>←</kbd><kbd>→</kbd> で範囲ごと移動、<kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> で 3′端、<kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd> で 5′端が動きます。ボタンは長押しで連続して動きます。<kbd>Ctrl</kbd>+<kbd>Z</kbd> で範囲を元に戻せます。
+    <h3>相補鎖</h3>
+    「相補鎖に切り替え」は、配列全体を相補鎖（5′→3′ 向きに並べ直したもの）にして表示します。選択範囲は同じ場所のままです。結果欄の「相補鎖（5′→3′）」は、選択範囲の相補鎖を 5′→3′ 向きに書いたもので、リバースプライマーとしてそのまま使える向きです。
+    <h3>計算値</h3>
+    計算式と条件は、結果欄の「計算方法と条件」にあります。縮重塩基（R, Y, N など）を含む範囲では、取りうる値の最小–最大を表示します。
+    <h3>データの扱い</h3>
+    読み込んだ配列はこのブラウザの中だけで処理され、外部には送信されません。配列と選択範囲は、次に開いたときのためにこのブラウザに保存されます。消すには、「配列の読み込み」を開いて、その中の「クリア」ボタンを押します。
+  </div>
+
+  <!-- 入力 -->
+  <details class="panel" id="inputPanel" open>
+    <summary>配列の読み込み</summary>
+    <textarea id="inputBox" class="mono" placeholder="ここに配列を貼り付けて「読み込む」。テキスト／FASTA ファイルをこの画面にドロップしても読み込めます。&#10;数字・空白・改行は自動で取り除きます。&gt; で始まる行は配列の名前として扱い、複数あれば配列ごとに区切って表示します。"></textarea>
+    <div class="row">
+      <button id="btnLoad" class="primary">読み込む</button>
+      <button id="btnPaste">クリップボードから読み込む</button>
+      <button id="btnClear">クリア</button>
+      <span id="loadMsg" class="note"></span>
+    </div>
+    <div class="note" style="margin-top:4px;">入力欄の外で <kbd>Ctrl</kbd>+<kbd>V</kbd> を押しても読み込めます。</div>
+  </details>
+
+  <!-- 配列表示と操作 -->
+  <div class="panel">
+    <div class="row" style="justify-content: space-between; margin-bottom: 6px;">
+      <div>
+        <span id="strandBadge">入力した鎖</span>
+        <span class="note" id="seqInfo"></span>
+      </div>
+      <div class="row">
+        <button id="btnFlip" title="表示する鎖を相補鎖に切り替える（選択範囲は同じ場所のまま）">相補鎖に切り替え</button>
+        <button id="btnUndo" title="Ctrl+Z">元に戻す</button>
+      </div>
+    </div>
+
+    <div id="view" class="mono" tabindex="0"></div>
+    <span id="measure" class="mono">ACGTACGTAC</span>
+
+    <div class="controls">
+      <div class="ctl">
+        <span>5′端（左端）</span>
+        <div class="row">
+          <button data-act="L-" title="5′側へ1塩基伸ばす">◀ 伸ばす</button>
+          <button data-act="L+" title="5′側を1塩基削る">削る ▶</button>
+        </div>
+        <span class="hint"><kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd></span>
+      </div>
+      <div class="ctl">
+        <span>範囲ごと移動（長さ固定）</span>
+        <div class="row">
+          <button data-act="S-">◀ 左へ</button>
+          <button data-act="S+">右へ ▶</button>
+        </div>
+        <span class="hint"><kbd>←</kbd><kbd>→</kbd></span>
+      </div>
+      <div class="ctl">
+        <span>3′端（右端）</span>
+        <div class="row">
+          <button data-act="R-" title="3′側を1塩基削る">◀ 削る</button>
+          <button data-act="R+" title="3′側へ1塩基伸ばす">伸ばす ▶</button>
+        </div>
+        <span class="hint"><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd></span>
+      </div>
+      <div class="ctl">
+        <span>開始位置 – 終了位置</span>
+        <div class="row">
+          <input type="number" id="posStart" min="1">
+          <span>–</span>
+          <input type="number" id="posEnd" min="1">
+        </div>
+        <span class="hint">&nbsp;</span>
+      </div>
+    </div>
+    <div class="note keys">
+      マウスでドラッグして範囲を選択。ボタンは長押しで連続移動。<kbd>Ctrl</kbd>+<kbd>Z</kbd> で元に戻す。
+    </div>
+  </div>
+
+  <!-- 結果 -->
+  <div class="panel result">
+    <div class="stats">
+      <div class="stat"><span class="lbl">長さ</span><span class="val"><span id="lenVal">0</span> nt</span></div>
+      <div class="stat"><span class="lbl">入力配列での位置</span><span class="val" id="origPos">–</span></div>
+      <div class="stat"><span class="lbl">GC 含量</span><span class="val"><span id="gcVal">–</span> %</span></div>
+    </div>
+    <div class="stats tm">
+      <div class="stat big"><span class="lbl">Tm（最近接塩基対法）</span><span class="val"><span id="tmNN">–</span> °C</span></div>
+      <div class="stat"><span class="lbl">Tm（GC 法）</span><span class="val"><span id="tmGC">–</span> °C</span></div>
+      <div class="stat"><span class="lbl">Tm（Wallace 法）</span><span class="val"><span id="tmWallace">–</span> °C</span></div>
+    </div>
+    <div class="note" id="calcNote" hidden></div>
+    <div class="seqout">
+      <span class="lbl">選択範囲（5′→3′）</span>
+      <span class="seq mono" id="selOut"></span>
+      <button id="btnCopySel">コピー</button>
+    </div>
+    <div class="seqout">
+      <span class="lbl">相補鎖（5′→3′）</span>
+      <span class="seq mono" id="rcOut"></span>
+      <button id="btnCopyRc">コピー</button>
+    </div>
+    <details class="note calc-cond" style="margin-top:8px;">
+      <summary style="font-weight:normal;">計算方法と条件</summary>
+      <ul>
+        <li>最近接塩基対法: 隣り合う2塩基ごとの熱力学値を足し合わせて求める。SantaLucia (1998) の統一パラメータと同論文の塩補正。Na⁺ 50 mM、プライマー 0.5 µM。Mg²⁺ は考慮していない。旧版（Breslauer 1986 のパラメータ）より数 °C 低く出る。</li>
+        <li>GC 法: Tm = 59.9 + 0.41 × GC含量(%) − 500 ÷ 長さ。</li>
+        <li>Wallace 法: Tm = 2 × (A と T の数) + 4 × (G と C の数)。14 塩基程度までの短い配列向けの目安。</li>
+        <li>縮重塩基（R, Y, N など）を含む範囲では、取りうる配列すべての中での最小–最大を表示します。組合せが 5 万通りを超える場合、最近接塩基対法は計算しません。</li>
+        <li>数塩基しかない短い範囲では Tm が負の値になることがあります。</li>
+      </ul>
+    </details>
+  </div>
+
+  <script>
+    "use strict";
+
+    // ===== 状態 =====
+    // seq: 表示中の鎖（洗浄済み）。start/end: 選択範囲 [start, end)。flipped: 入力の相補鎖を表示中か。
+    // records: 表示中の鎖での各配列（複数 FASTA 用）の { name, start, len }
+    const state = { seq: "", start: 0, end: 0, flipped: false, records: [] };
+    const history = [];
+    const HISTORY_MAX = 500;
+    const STORAGE_KEY = "tmCalculatorV2";
+
+    const $ = (id) => document.getElementById(id);
+    const view = $("view");
+
+    // ===== 配列処理 =====
+    const COMP = {
+      A: "T", T: "A", G: "C", C: "G", U: "A",
+      R: "Y", Y: "R", S: "S", W: "W", K: "M", M: "K",
+      B: "V", V: "B", D: "H", H: "D", N: "N"
+    };
+
+    function reverseComplement(seq) {
+      let out = "";
+      for (let i = seq.length - 1; i >= 0; i--) {
+        const c = seq[i];
+        const up = c.toUpperCase();
+        const comp = COMP[up] || "N";
+        out += (c === up) ? comp : comp.toLowerCase();
+      }
+      return out;
+    }
+
+    // FASTA ヘッダ行を捨て、塩基記号（縮重塩基を含む）以外を取り除く
+    // ">" で始まる行ごとに配列を区切り、records に各配列の名前・開始位置・長さを残す
+    function cleanSequence(text) {
+      const raw = [];
+      let cur = null;
+      let removed = 0;
+      for (const line of text.split(/\r\n|\n|\r/)) {
+        if (line.trim().startsWith(">")) {
+          cur = { name: line.trim().slice(1).trim(), seq: "" };
+          raw.push(cur);
+          continue;
+        }
+        if (!cur) { cur = { name: "", seq: "" }; raw.push(cur); }
+        const kept = line.replace(/[^ACGTURYSWKMBDHVN]/gi, "");
+        removed += line.length - kept.length;
+        cur.seq += kept;
+      }
+      const records = [];
+      let pos = 0;
+      for (const r of raw) {
+        if (r.seq.length === 0) continue;
+        records.push({ name: r.name, start: pos, len: r.seq.length });
+        pos += r.seq.length;
+      }
+      return { seq: raw.map((r) => r.seq).join(""), removed, records };
+    }
+
+    function esc(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+
+    // ===== Tm 計算（式とパラメータは旧版と同じ） =====
+    // 塩基の番号: A=0, T=1, G=2, C=3
+    // SantaLucia (1998) の統一パラメータ。[5′側の塩基][3′側の塩基]、ΔH は kcal/mol、ΔS は cal/(mol·K)
+    const NN_DH = [
+      [-7.9, -7.2, -7.8,  -8.4],
+      [-7.2, -7.9, -8.5,  -8.2],
+      [-8.2, -8.4, -8.0,  -9.8],
+      [-8.5, -7.8, -10.6, -8.0]
+    ];
+    const NN_DS = [
+      [-22.2, -20.4, -21.0, -22.4],
+      [-21.3, -22.2, -22.7, -22.2],
+      [-22.2, -22.4, -19.9, -24.4],
+      [-22.7, -21.0, -27.2, -19.9]
+    ];
+    // 両端の塩基ごとの開始項（A・T 末端と G・C 末端で値が違う）
+    const INIT_DH = [2.3, 2.3, 0.1, 0.1];
+    const INIT_DS = [4.1, 4.1, -2.8, -2.8];
+    const NA_CONC = 0.05;       // Na⁺ (M)
+    const PRIMER_CONC = 0.5e-6; // プライマー濃度 (M)
+
+    // sumH・sumS は開始項を含む合計。selfComp は自己相補的な配列かどうか
+    function tmFromSums(sumH, sumS, length, selfComp) {
+      const R = 1.987;
+      // 塩補正（SantaLucia 1998）: ΔS に 0.368 × (長さ − 1) × ln[Na⁺] を足す
+      let dS = sumS + 0.368 * (length - 1) * Math.log(NA_CONC);
+      if (selfComp) dS += -1.4;
+      const x = selfComp ? 1 : 4;
+      return (1000 * sumH) / (dS + R * Math.log(PRIMER_CONC / x)) - 273.15;
+    }
+
+    // 縮重塩基が表しうる塩基（番号の配列）
+    const IUPAC = {
+      A: [0], T: [1], U: [1], G: [2], C: [3],
+      R: [0, 2], Y: [1, 3], S: [2, 3], W: [0, 1], K: [1, 2], M: [0, 3],
+      B: [1, 2, 3], D: [0, 1, 2], H: [0, 1, 3], V: [0, 2, 3], N: [0, 1, 2, 3]
+    };
+    const MAX_COMBOS = 50000;
+
+    // 選択範囲の GC 含量と Tm を [最小, 最大] で返す。縮重塩基がなければ最小＝最大
+    function calcRanges(sel) {
+      const L = sel.length;
+      if (L === 0) return null;
+      const sets = [];
+      for (const ch of sel) sets.push(IUPAC[ch.toUpperCase()] || IUPAC.N);
+
+      let gcMin = 0, gcMax = 0, combos = 1, degenerate = false;
+      for (const s of sets) {
+        const nGC = s.filter((b) => b >= 2).length;
+        if (nGC === s.length) gcMin++;
+        if (nGC > 0) gcMax++;
+        if (s.length > 1) degenerate = true;
+        combos = Math.min(combos * s.length, MAX_COMBOS + 1);
+      }
+      const tmGC = (g) => 59.9 + 0.41 * (g / L * 100) - 500 / L;
+      const wallace = (g) => 2 * (L - g) + 4 * g;
+      const out = {
+        degenerate,
+        tooMany: false,
+        gc: [gcMin / L * 100, gcMax / L * 100],
+        tmGC: [tmGC(gcMin), tmGC(gcMax)],
+        wallace: [wallace(gcMin), wallace(gcMax)],
+        nn: null
+      };
+      if (L < 2) return out;
+      if (combos > MAX_COMBOS) { out.tooMany = true; return out; }
+
+      // 取りうる配列をすべてたどって最近接塩基対法の最小・最大を求める
+      let lo = Infinity, hi = -Infinity;
+      const bases = new Array(L);
+      // 自己相補的か（相補の番号は A↔T, G↔C で、番号の最下位ビットを反転したもの）
+      const isSelfComp = () => {
+        if (L % 2 !== 0) return false;
+        for (let k = 0; k < L / 2; k++) {
+          if (bases[k] !== (bases[L - 1 - k] ^ 1)) return false;
+        }
+        return true;
+      };
+      const walk = (i, prev, sumH, sumS) => {
+        if (i === L) {
+          const tm = tmFromSums(sumH + INIT_DH[prev], sumS + INIT_DS[prev], L, isSelfComp());
+          if (tm < lo) lo = tm;
+          if (tm > hi) hi = tm;
+          return;
+        }
+        for (const b of sets[i]) {
+          bases[i] = b;
+          if (prev < 0) walk(i + 1, b, INIT_DH[b], INIT_DS[b]);
+          else walk(i + 1, b, sumH + NN_DH[prev][b], sumS + NN_DS[prev][b]);
+        }
+      };
+      walk(0, -1, 0, 0);
+      out.nn = [lo, hi];
+      return out;
+    }
+    function rangeText(range, digits) {
+      const a = range[0].toFixed(digits), b = range[1].toFixed(digits);
+      return a === b ? a : a + "–" + b;
+    }
+
+    // ===== 履歴・保存 =====
+    // seqId: 読み込み・クリアのたびに変わる番号。同じ配列かどうかの判定に使う
+    let seqId = 0;
+    function snapshot() {
+      return { seq: state.seq, start: state.start, end: state.end, flipped: state.flipped, records: state.records, id: seqId };
+    }
+    function pushHistory() {
+      history.push(snapshot());
+      if (history.length > HISTORY_MAX) history.shift();
+    }
+    function undo() {
+      const prev = history.pop();
+      if (!prev) return;
+      if (prev.id === seqId && prev.flipped !== state.flipped) {
+        // 同じ配列なら表示中の鎖は変えず、範囲だけを今の鎖の座標に直して戻す
+        const len = prev.seq.length;
+        state.start = len - prev.end;
+        state.end = len - prev.start;
+      } else {
+        state.seq = prev.seq;
+        state.start = prev.start;
+        state.end = prev.end;
+        state.flipped = prev.flipped;
+        state.records = prev.records;
+        seqId = prev.id;
+      }
+      render(true);
+    }
+    function save() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot())); } catch (e) { /* 保存できなくても動作は続ける */ }
+    }
+    function restore() {
+      try {
+        const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (s && typeof s.seq === "string") {
+          state.seq = s.seq;
+          state.end = Math.min(Math.max(0, s.end | 0), s.seq.length);
+          state.start = Math.min(Math.max(0, s.start | 0), state.end);
+          state.flipped = !!s.flipped;
+          const total = Array.isArray(s.records) ? s.records.reduce((n, r) => n + (r.len | 0), 0) : -1;
+          state.records = total === s.seq.length
+            ? s.records.map((r) => ({ name: String(r.name || ""), start: r.start | 0, len: r.len | 0 }))
+            : (s.seq.length > 0 ? [{ name: "", start: 0, len: s.seq.length }] : []);
+        }
+      } catch (e) { /* 壊れた保存データは無視 */ }
+    }
+
+    // ===== 操作 =====
+    function loadSequence(text) {
+      const { seq, removed, records } = cleanSequence(text);
+      if (seq.length === 0) {
+        $("loadMsg").textContent = "塩基配列が見つかりませんでした。";
+        return;
+      }
+      pushHistory();
+      seqId++;
+      state.seq = seq;
+      state.flipped = false;
+      state.start = 0;
+      // 短い配列はそれ自体がプライマーとみなして全体を選択
+      state.records = records;
+      state.end = (records.length === 1 && seq.length <= 100) ? seq.length : 0;
+      $("loadMsg").textContent = (records.length > 1 ? records.length + " 本の配列、計 " : "") + seq.length + " nt を読み込みました" +
+        (removed > 0 ? "（数字・空白など " + removed + " 文字を除去）" : "") + "。";
+      $("inputBox").value = "";
+      $("inputPanel").open = false;
+      render(true);
+    }
+
+    function setRange(start, end, noHistory) {
+      const len = state.seq.length;
+      end = Math.min(Math.max(0, end), len);
+      start = Math.min(Math.max(0, start), end);
+      if (start === state.start && end === state.end) return;
+      if (!noHistory) pushHistory();
+      state.start = start;
+      state.end = end;
+      render(true);
+    }
+
+    function act(name) {
+      const { start, end } = state;
+      const len = state.seq.length;
+      switch (name) {
+        case "L-": setRange(start - 1, end); break;
+        case "L+": if (start < end) setRange(start + 1, end); break;
+        case "R-": if (end > start) setRange(start, end - 1); break;
+        case "R+": setRange(start, end + 1); break;
+        case "S-": if (start > 0) setRange(start - 1, end - 1); break;
+        case "S+": if (end < len) setRange(start + 1, end + 1); break;
+      }
+    }
+
+    function flip() {
+      if (state.seq.length === 0) return;
+      // 鎖の切り替えは「元に戻す」の対象外（同じボタンで戻せるため）
+      const len = state.seq.length;
+      const s = state.start, e = state.end;
+      state.seq = reverseComplement(state.seq);
+      state.start = len - e;
+      state.end = len - s;
+      state.flipped = !state.flipped;
+      state.records = state.records
+        .map((r) => ({ name: r.name, start: len - (r.start + r.len), len: r.len }))
+        .reverse();
+      render(true);
+    }
+
+    // ===== 描画 =====
+    let perLine = 60;
+    function computePerLine() {
+      const charW = $("measure").getBoundingClientRect().width / 10;
+      if (!charW) return;
+      const usable = view.clientWidth - 8 - charW * 7;
+      perLine = Math.max(10, Math.floor(usable / charW / 10) * 10);
+    }
+
+
+    function render(scrollToSelection) {
+      const { seq, start, end } = state;
+      const len = seq.length;
+
+      // 配列表示
+      if (len === 0) {
+        view.innerHTML = '<div class="empty">配列がありません。上の「配列の読み込み」から貼り付けてください。</div>';
+      } else {
+        const parts = [];
+        const multi = state.records.length > 1;
+        for (const rec of state.records) {
+        const recEnd = rec.start + rec.len;
+        // 複数配列のときは配列ごとに改行し、名前の行をはさむ（名前は ::before で描くので選択範囲の計算に影響しない）
+        if (multi) parts.push('<div class="rec" data-name="&gt;' + esc(rec.name) + '"></div>');
+        for (let i = rec.start; i < recEnd; i += perLine) {
+          const j = Math.min(i + perLine, recEnd);
+          let html;
+          if (start === end && start >= i && (start < j || (start === len && j === len))) {
+            html = seq.slice(i, start) + '<span class="caret"></span>' + seq.slice(start, j);
+          } else if (end <= i || start >= j || start === end) {
+            html = seq.slice(i, j);
+          } else {
+            const a = Math.max(start, i), b = Math.min(end, j);
+            html = seq.slice(i, a) + "<mark>" + seq.slice(a, b) + "</mark>" + seq.slice(b, j);
+          }
+          parts.push('<div class="ln" data-pos="' + (i + 1) + '">' + html + "</div>");
+        }
+        }
+        view.innerHTML = parts.join("");
+        if (scrollToSelection) {
+          const target = view.querySelector("mark, .caret");
+          if (target) {
+            const vr = view.getBoundingClientRect(), tr = target.getBoundingClientRect();
+            if (tr.top < vr.top || tr.bottom > vr.bottom) {
+              view.scrollTop += tr.top - vr.top - view.clientHeight / 3;
+            }
+          }
+        }
+      }
+
+      // 鎖の表示
+      const badge = $("strandBadge");
+      badge.textContent = state.flipped ? "相補鎖を表示中" : "入力した鎖";
+      badge.classList.toggle("rev", state.flipped);
+      $("btnFlip").textContent = state.flipped ? "入力した鎖に戻す" : "相補鎖に切り替え";
+      $("seqInfo").textContent = len > 0 ? "全長 " + len + " nt" : "";
+
+      // 位置
+      const hasSel = end > start;
+      $("posStart").value = hasSel ? start + 1 : "";
+      $("posEnd").value = hasSel ? end : "";
+      $("posStart").max = len; $("posEnd").max = len;
+      const selRec = hasSel ? state.records.find((r) => start >= r.start && end <= r.start + r.len) : null;
+      const spansRecords = hasSel && !selRec;
+      if (!hasSel) {
+        $("origPos").textContent = "–";
+      } else if (spansRecords) {
+        $("origPos").textContent = "複数の配列にまたがる";
+      } else if (state.records.length > 1) {
+        // 複数配列のときは、その配列の名前と配列内での位置を示す
+        const ls = start - selRec.start, le = end - selRec.start;
+        const label = selRec.name.split(/\s+/)[0].slice(0, 24);
+        $("origPos").textContent = (label ? label + ": " : "") + (state.flipped
+          ? (selRec.len - le + 1) + "–" + (selRec.len - ls) + "（相補鎖）"
+          : (ls + 1) + "–" + le);
+      } else if (state.flipped) {
+        $("origPos").textContent = (len - end + 1) + "–" + (len - start) + "（相補鎖）";
+      } else {
+        $("origPos").textContent = (start + 1) + "–" + end;
+      }
+
+      // 計算
+      const sel = seq.slice(start, end);
+      $("lenVal").textContent = sel.length;
+      const rg = calcRanges(sel);
+      $("gcVal").textContent = rg ? rangeText(rg.gc, 1) : "–";
+      $("tmNN").textContent = rg && rg.nn ? rangeText(rg.nn, 1) : "–";
+      $("tmGC").textContent = rg ? rangeText(rg.tmGC, 1) : "–";
+      $("tmWallace").textContent = rg ? rangeText(rg.wallace, 0) : "–";
+      const notes = [];
+      if (rg && rg.degenerate) notes.push("縮重塩基を含むため、取りうる値の最小–最大を表示しています。");
+      if (rg && rg.tooMany) notes.push("縮重塩基の組合せが多すぎるため、最近接塩基対法の Tm は計算していません。");
+      if (spansRecords) notes.push("選択範囲が複数の配列にまたがっています。");
+      $("selOut").textContent = sel;
+      $("rcOut").textContent = reverseComplement(sel);
+      $("calcNote").hidden = notes.length === 0;
+      $("calcNote").textContent = notes.join(" ");
+
+      // ボタンの有効・無効
+      $("btnUndo").disabled = history.length === 0;
+      $("btnCopySel").disabled = !hasSel;
+      $("btnCopyRc").disabled = !hasSel;
+
+      save();
+    }
+
+    // ===== マウスでの範囲選択 =====
+    // 行番号は ::before で描いているので Range.toString() には配列文字だけが入る
+    function offsetInView(node, offset) {
+      const r = document.createRange();
+      r.setStart(view, 0);
+      r.setEnd(node, offset);
+      return r.toString().length;
+    }
+    function applyDomSelection() {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      if (state.seq.length === 0) return;
+      if (!view.contains(sel.anchorNode) || !view.contains(sel.focusNode)) return;
+      const a = offsetInView(sel.anchorNode, sel.anchorOffset);
+      const b = offsetInView(sel.focusNode, sel.focusOffset);
+      sel.removeAllRanges();
+      if (a === b) return;
+      pushHistory();
+      state.start = Math.min(a, b);
+      state.end = Math.max(a, b);
+      render(false);
+    }
+    view.addEventListener("mouseup", () => setTimeout(applyDomSelection, 0));
+
+    // ===== ボタン（長押しで連続） =====
+    let holdTimer = null, holdInterval = null;
+    function stopHold() {
+      clearTimeout(holdTimer); clearInterval(holdInterval);
+      holdTimer = holdInterval = null;
+    }
+    document.querySelectorAll("button[data-act]").forEach((btn) => {
+      const name = btn.dataset.act;
+      btn.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        act(name);
+        stopHold();
+        holdTimer = setTimeout(() => { holdInterval = setInterval(() => act(name), 60); }, 350);
+      });
+      ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => btn.addEventListener(ev, stopHold));
+      // キーボード（Enter/Space）で押した場合のみ click で処理
+      btn.addEventListener("click", (e) => { if (e.detail === 0) act(name); });
+    });
+
+    // ===== キーボード =====
+    function inTextField(el) {
+      return el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.tagName === "SELECT");
+    }
+    document.addEventListener("keydown", (e) => {
+      if (inTextField(e.target)) return;
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); return; }
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.altKey || e.metaKey) return;
+      e.preventDefault();
+      const sign = e.key === "ArrowLeft" ? "-" : "+";
+      if (e.shiftKey) act("R" + sign);
+      else if (e.ctrlKey) act("L" + sign);
+      else act("S" + sign);
+    });
+    document.addEventListener("paste", (e) => {
+      if (inTextField(e.target)) return;
+      const text = (e.clipboardData || window.clipboardData).getData("text");
+      if (text) { e.preventDefault(); loadSequence(text); }
+    });
+
+    // ===== ファイル・テキストのドラッグ＆ドロップ =====
+    let dragDepth = 0;
+    document.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      dragDepth++;
+      document.body.classList.add("dragging");
+    });
+    document.addEventListener("dragleave", () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) document.body.classList.remove("dragging");
+    });
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      document.body.classList.remove("dragging");
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      try {
+        if (dt.files && dt.files.length > 0) {
+          loadSequence(await dt.files[0].text());
+        } else {
+          const text = dt.getData("text");
+          if (text) loadSequence(text);
+        }
+      } catch (err) {
+        $("loadMsg").textContent = "ファイルを読めませんでした。";
+        $("inputPanel").open = true;
+      }
+    });
+
+    // ===== その他のボタン =====
+    $("btnLoad").addEventListener("click", () => loadSequence($("inputBox").value));
+    $("btnPaste").addEventListener("click", async () => {
+      try {
+        loadSequence(await navigator.clipboard.readText());
+      } catch (err) {
+        $("loadMsg").textContent = "クリップボードを読めませんでした。入力欄に貼り付けて「読み込む」を押してください。";
+      }
+    });
+    $("btnClear").addEventListener("click", () => {
+      if (state.seq.length === 0) return;
+      pushHistory();
+      seqId++;
+      state.records = [];
+      state.seq = ""; state.start = 0; state.end = 0; state.flipped = false;
+      $("loadMsg").textContent = "クリアしました（「元に戻す」で復元できます）。";
+      render(false);
+    });
+    $("btnHelp").addEventListener("click", () => {
+      const help = $("help");
+      help.hidden = !help.hidden;
+      $("btnHelp").setAttribute("aria-expanded", String(!help.hidden));
+      $("btnHelp").textContent = help.hidden ? "？ 使い方" : "× 使い方を閉じる";
+    });
+    $("btnFlip").addEventListener("click", flip);
+    $("btnUndo").addEventListener("click", undo);
+
+    function copyFrom(id, btn) {
+      const text = $(id).textContent;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        const old = btn.textContent;
+        btn.textContent = "コピー済み";
+        setTimeout(() => { btn.textContent = old; }, 1200);
+      }).catch(() => {
+        btn.textContent = "失敗";
+        setTimeout(() => { btn.textContent = "コピー"; }, 1200);
+      });
+    }
+    $("btnCopySel").addEventListener("click", (e) => copyFrom("selOut", e.currentTarget));
+    $("btnCopyRc").addEventListener("click", (e) => copyFrom("rcOut", e.currentTarget));
+
+    function applyPosInputs() {
+      const s = parseInt($("posStart").value, 10);
+      const e = parseInt($("posEnd").value, 10);
+      if (isNaN(s) || isNaN(e) || s < 1 || e < s) { render(false); return; }
+      setRange(s - 1, e);
+    }
+    $("posStart").addEventListener("change", applyPosInputs);
+    $("posEnd").addEventListener("change", applyPosInputs);
+
+    window.addEventListener("resize", () => {
+      const before = perLine;
+      computePerLine();
+      if (perLine !== before) render(false);
+    });
+
+    // ===== 起動 =====
+    restore();
+    computePerLine();
+    if (state.seq.length > 0) $("inputPanel").open = false;
+    render(true);
+  </script>
+</body>
+</html>
